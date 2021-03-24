@@ -63,7 +63,7 @@ function dirdiff {
                 }
             }else{
                 $global:pcount+=$(Get-ChildItem -Recurse -File $currPath | measure-object).count
-                Write-Progress -Activity $(getActText) -Status $s-PercentComplete $($global:pcount/$fcount*100)
+                Write-Progress -Activity $(getActText) -Status $currPath -PercentComplete $($global:pcount/$fcount*100)
                 Write-Output $currPath
             }
         }
