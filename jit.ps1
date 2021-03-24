@@ -1,3 +1,14 @@
+$global:fcount=0
+$global:pcount=0
+
+function getprog {
+    Write-Output $([math]::Round($($global:pcount/$fcount*100),2))
+}
+
+function getActText {
+    Write-Output "Scanning for changes: $(getprog)% complete"  
+}
+
 function isdir {
     param (
         $path
@@ -30,15 +41,19 @@ function dirdiff {
         $s=$(abspath $s)
         $d=$(abspath $d)
 
+
         Get-ChildItem $s | ForEach-Object {
             $currPath=$_.FullName
             $testPath=$($currPath -replace [regex]::escape($s),$d)
 
-            if($(test-path $testPath) -eq $true){ 
+            if($(test-path $testPath) -eq $true){
                 if($(isdir $currPath) -eq $true){
                     # if is dir
                     dirdiff $currPath $testPath
                 }else{
+                    $global:pcount++
+                    Write-Progress -Activity $(getActText) -Status $currPath -PercentComplete $($global:pcount/$fcount*100)
+
                     $currHash=$(Get-FileHash $currPath).Hash
                     $testHash=$(Get-FileHash $testPath).Hash
 
@@ -47,6 +62,8 @@ function dirdiff {
                     }
                 }
             }else{
+                $global:pcount+=$(Get-ChildItem -Recurse -File $currPath | measure-object).count
+                Write-Progress -Activity $(getActText) -Status $s-PercentComplete $($global:pcount/$fcount*100)
                 Write-Output $currPath
             }
         }
@@ -59,8 +76,9 @@ function cpdif {
         $d
     )
 
-
     $diffs = $(dirdiff $s $d)
+
+    Write-Progress  -Activity "Scanning for changes" -Completed
 
     if($diffs.count -ne 0){
         $diffs | ForEach-Object {
@@ -71,7 +89,7 @@ function cpdif {
             Copy-Item $src $des -Verbose -Recurse
         }
     }else{
-        Write-Output "No diff!"
+        Write-Output "No changes found!"
     }
 }
 
@@ -114,10 +132,12 @@ switch -wildcard ( $opt )
         }else{
             $remote=$((Get-Content './.jit.json' | Out-String | ConvertFrom-Json).remote)
             switch ($opt) {
-                "push" { 
+                "push" {
+                    $fcount=(Get-ChildItem -Recurse -File ./ | measure-object).count
                     cpdif ./ $remote
                 }
                 "pull" {
+                    $fcount=(Get-ChildItem -Recurse -File $remote | measure-object).count
                     cpdif $remote ./
                 }
                 default {
