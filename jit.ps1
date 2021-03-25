@@ -1,100 +1,5 @@
-$global:fcount=0
-$global:pcount=0
-
-function getprog {
-    Write-Output $([math]::Round($($global:pcount/$fcount*100),2))
-}
-
-function getActText {
-    Write-Output "Scanning for changes: $(getprog)% complete"  
-}
-
-function isdir {
-    param (
-        $path
-    )
-    Write-Output $((Get-Item $path) -is [System.IO.DirectoryInfo])
-}
-
-function abspath {
-    param (
-        $path
-    )
-    $path=$($path -replace [regex]::escape("/"),"\")
-    $a=$(Resolve-Path $path).Path
-    if($(isdir $a) -eq $true -and $a -notmatch '\\$'){
-        $a="$a\"
-    }
-    Write-Output $(convert-path $a)
-}
-
-function dirdiff {
-    param (
-        $s,
-        $d
-    )
-
-    if ($null -eq $s -or $s -eq "" -or $null -eq $d -or $d -eq ""){
-        Write-Output "Invalid arguments"
-    }else{
-        # resolve to abs path
-        $s=$(abspath $s)
-        $d=$(abspath $d)
-
-
-        Get-ChildItem $s | ForEach-Object {
-            $currPath=$_.FullName
-            $testPath=$($currPath -replace [regex]::escape($s),$d)
-
-            if($(test-path $testPath) -eq $true){
-                if($(isdir $currPath) -eq $true){
-                    # if is dir
-                    dirdiff $currPath $testPath
-                }else{
-                    $global:pcount++
-                    Write-Progress -Activity $(getActText) -Status $currPath -PercentComplete $($global:pcount/$fcount*100)
-
-                    $currHash=$(Get-FileHash $currPath).Hash
-                    $testHash=$(Get-FileHash $testPath).Hash
-
-                    if($currHash -ne $testHash){
-                        Write-Output $currPath
-                    }
-                }
-            }else{
-                $global:pcount+=$(Get-ChildItem -Recurse -File $currPath | measure-object).count
-                Write-Progress -Activity $(getActText) -Status $currPath -PercentComplete $($global:pcount/$fcount*100)
-                Write-Output $currPath
-            }
-        }
-    }
-}
-
-function cpdif {
-    param (
-        $s,
-        $d
-    )
-
-    $diffs = $(dirdiff $s $d)
-
-    Write-Progress  -Activity "Scanning for changes" -Completed
-
-    if($diffs.count -ne 0){
-        $diffs | ForEach-Object {
-            $src = $(abspath $_)
-            $s=$(abspath $s)
-            $d=$(abspath $d)
-            $des = $($src -replace [regex]::escape($s),$d)
-            Copy-Item $src $des -Verbose -Recurse
-        }
-    }else{
-        Write-Output "No changes found!"
-    }
-}
-
-$opt=$args[0]
 $usage= "Usage: jit init | push | pull"
+$opt=$args[0]
 
 switch -wildcard ( $opt )
 {
@@ -133,12 +38,10 @@ switch -wildcard ( $opt )
             $remote=$((Get-Content './.jit.json' | Out-String | ConvertFrom-Json).remote)
             switch ($opt) {
                 "push" {
-                    $fcount=(Get-ChildItem -Recurse -File ./ | measure-object).count
-                    cpdif ./ $remote
+                    robocopy $pwd $remote /e /xo
                 }
                 "pull" {
-                    $fcount=(Get-ChildItem -Recurse -File $remote | measure-object).count
-                    cpdif $remote ./
+                    robocopy $remote $pwd /e /xo
                 }
                 default {
                     Write-Output $usage
