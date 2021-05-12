@@ -1,5 +1,6 @@
 $usage= "Usage: jit init | push | pull"
 $opt=$args[0]
+$sw=$args[1]
 
 switch -wildcard ( $opt )
 {
@@ -11,7 +12,7 @@ switch -wildcard ( $opt )
             if($(test-path $remote) -eq $false){
                 Write-Output "$remote is not a valid path"
             }else {
-                $cfg=@{remote=$(abspath $remote)}
+                $cfg=@{remote=$(Resolve-Path $remote)}
                 $cfg | ConvertTo-Json -depth 100 | Out-File ./.jit.json
                 if($(test-path ./.jit.json) -eq $true){
                     Write-Output "jit is now initialized at $remote"
@@ -38,10 +39,18 @@ switch -wildcard ( $opt )
             $remote=$((Get-Content './.jit.json' | Out-String | ConvertFrom-Json).remote)
             switch ($opt) {
                 "push" {
-                    robocopy $pwd $remote /e /xo
+                    if( $sw -eq "-m" ){
+                        robocopy $pwd $remote /e /xo /mir
+                    }else{
+                        robocopy $pwd $remote /e /xo
+                    }
                 }
                 "pull" {
-                    robocopy $remote $pwd /e /xo
+                    if( $sw -eq "-m" ){
+                         robocopy $remote $pwd /e /xo /mir
+                    }else{
+                        robocopy $remote $pwd /e /xo
+                    }
                 }
                 default {
                     Write-Output $usage
